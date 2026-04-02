@@ -1,6 +1,6 @@
 module github.com/git-treeline/git-treeline
 
-go 1.24.0
+go 1.24.12
 
 require (
 	github.com/spf13/cobra v1.10.2
