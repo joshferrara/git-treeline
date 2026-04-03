@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+## [0.12.0]
+
+- Smarter env file detection: `init` finds which env file actually exists (`.env.local`, `.env.development`, `.env`, etc.) instead of hardcoding per framework
+- Interactive env file selection: confirms single match, prompts to choose when multiple found
+- Framework-specific port wiring hints printed after `init` (Next.js, Node, Python)
+- Port guidance included in generated agent context files (`treeline.mdc`, `CLAUDE.md`)
+
 ## [0.11.0]
 
 - Store `branch` name in allocation registry — enables external consumers (menulets, dashboards) to display the actual branch instead of the worktree directory name
