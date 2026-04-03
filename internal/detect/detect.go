@@ -78,7 +78,7 @@ func (r *Result) detectFramework(root string) {
 func (r *Result) detectDatabase(root string) {
 	dbYml := filepath.Join(root, "config", "database.yml")
 	if f, err := os.Open(dbYml); err == nil {
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		scanner := bufio.NewScanner(f)
 		for scanner.Scan() {
 			line := strings.TrimSpace(scanner.Text())
