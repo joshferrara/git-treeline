@@ -1,6 +1,10 @@
 package database
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestParsePsqlListContains(t *testing.T) {
 	// Realistic psql -lqt output
@@ -33,6 +37,30 @@ func TestParsePsqlListContains(t *testing.T) {
 				t.Errorf("parsePsqlListContains(%q) = %v, want %v", tt.db, got, tt.expect)
 			}
 		})
+	}
+}
+
+func TestIsCustomFormat_PGDMP(t *testing.T) {
+	dir := t.TempDir()
+	f := filepath.Join(dir, "dump.pgdmp")
+	_ = os.WriteFile(f, []byte("PGDMP\x00\x00\x00more data"), 0o644)
+	if !isCustomFormat(f) {
+		t.Error("expected custom format for PGDMP header")
+	}
+}
+
+func TestIsCustomFormat_PlainSQL(t *testing.T) {
+	dir := t.TempDir()
+	f := filepath.Join(dir, "dump.sql")
+	_ = os.WriteFile(f, []byte("-- PostgreSQL dump\nCREATE TABLE foo"), 0o644)
+	if isCustomFormat(f) {
+		t.Error("expected plain SQL to not be detected as custom format")
+	}
+}
+
+func TestIsCustomFormat_Missing(t *testing.T) {
+	if isCustomFormat("/nonexistent/dump.pgdmp") {
+		t.Error("expected false for missing file")
 	}
 }
 

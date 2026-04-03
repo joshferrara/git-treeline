@@ -1,0 +1,182 @@
+package cmd
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/git-treeline/git-treeline/internal/config"
+	"github.com/git-treeline/git-treeline/internal/database"
+	"github.com/git-treeline/git-treeline/internal/registry"
+	"github.com/git-treeline/git-treeline/internal/worktree"
+	"github.com/spf13/cobra"
+)
+
+var dbResetFrom string
+
+func init() {
+	dbResetCmd.Flags().StringVar(&dbResetFrom, "from", "", "Clone from this database instead of the configured template")
+	dbCmd.AddCommand(dbResetCmd)
+	dbCmd.AddCommand(dbRestoreCmd)
+	dbCmd.AddCommand(dbNameCmd)
+	dbCmd.AddCommand(dbDropCmd)
+	rootCmd.AddCommand(dbCmd)
+}
+
+var dbCmd = &cobra.Command{
+	Use:   "db",
+	Short: "Manage the worktree's database",
+}
+
+var dbNameCmd = &cobra.Command{
+	Use:   "name",
+	Short: "Print the worktree's database name",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		info, err := resolveDB()
+		if err != nil {
+			return err
+		}
+		fmt.Println(info.target)
+		return nil
+	},
+}
+
+var dbDropCmd = &cobra.Command{
+	Use:   "drop",
+	Short: "Drop the worktree's database",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		info, err := resolveDB()
+		if err != nil {
+			return err
+		}
+		exists, err := info.adapter.Exists(info.target)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			fmt.Printf("Database %s does not exist\n", info.target)
+			return nil
+		}
+		if err := info.adapter.Drop(info.target); err != nil {
+			return fmt.Errorf("dropping database: %w", err)
+		}
+		fmt.Printf("Dropped %s\n", info.target)
+		return nil
+	},
+}
+
+var dbResetCmd = &cobra.Command{
+	Use:   "reset",
+	Short: "Drop and re-clone the worktree's database from the template",
+	Long: `Drop the worktree database and re-clone it from the template configured
+in .treeline.yml. Use --from to clone from a different database instead.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		info, err := resolveDB()
+		if err != nil {
+			return err
+		}
+
+		source := info.template
+		if dbResetFrom != "" {
+			source = dbResetFrom
+		}
+		if source == "" {
+			return fmt.Errorf("no template database configured in .treeline.yml and no --from specified")
+		}
+
+		fmt.Printf("==> Dropping %s\n", info.target)
+		if err := info.adapter.Drop(info.target); err != nil {
+			return fmt.Errorf("dropping database: %w", err)
+		}
+
+		fmt.Printf("==> Cloning %s → %s\n", source, info.target)
+		if err := info.adapter.Clone(source, info.target); err != nil {
+			return err
+		}
+
+		fmt.Printf("==> Done. Database %s ready.\n", info.target)
+		return nil
+	},
+}
+
+var dbRestoreCmd = &cobra.Command{
+	Use:   "restore <dumpfile>",
+	Short: "Drop and restore the worktree's database from a dump file",
+	Long: `Drop the worktree database, create a fresh one, and restore from a
+pg_dump file. Supports both custom format and plain SQL dumps.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		dumpFile := args[0]
+		if _, err := os.Stat(dumpFile); err != nil {
+			return fmt.Errorf("dump file not found: %s", dumpFile)
+		}
+
+		info, err := resolveDB()
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("==> Dropping %s\n", info.target)
+		if err := info.adapter.Drop(info.target); err != nil {
+			return fmt.Errorf("dropping database: %w", err)
+		}
+
+		fmt.Printf("==> Restoring %s from %s\n", info.target, dumpFile)
+		if err := info.adapter.Restore(info.target, dumpFile); err != nil {
+			return err
+		}
+
+		fmt.Printf("==> Done. Database %s restored.\n", info.target)
+		return nil
+	},
+}
+
+type dbInfo struct {
+	target   string
+	template string
+	adapter  database.Adapter
+}
+
+func resolveDB() (*dbInfo, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("getting working directory: %w", err)
+	}
+
+	absPath, _ := filepath.Abs(cwd)
+	mainRepo := worktree.DetectMainRepo(absPath)
+	pc := config.LoadProjectConfig(mainRepo)
+
+	reg := registry.New("")
+	alloc := reg.Find(absPath)
+	if alloc == nil {
+		return nil, fmt.Errorf("no allocation found for %s — run 'gtl setup' first", absPath)
+	}
+
+	dbName, _ := alloc["database"].(string)
+	if dbName == "" {
+		return nil, fmt.Errorf("no database configured for this worktree")
+	}
+
+	adapterName := pc.DatabaseAdapter()
+	adapter, err := database.ForAdapter(adapterName)
+	if err != nil {
+		return nil, err
+	}
+
+	target := dbName
+	if adapterName == "sqlite" {
+		target = filepath.Join(absPath, dbName)
+	}
+
+	template := pc.DatabaseTemplate()
+	if adapterName == "sqlite" && template != "" {
+		template = filepath.Join(mainRepo, template)
+	}
+
+	return &dbInfo{
+		target:   target,
+		template: template,
+		adapter:  adapter,
+	}, nil
+}

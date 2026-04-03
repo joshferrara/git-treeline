@@ -87,6 +87,43 @@ func (pg *PostgreSQL) Drop(target string) error {
 	return exec.Command("dropdb", "--if-exists", target).Run()
 }
 
+func (pg *PostgreSQL) Restore(target, dumpFile string) error {
+	if !dbIdentifierRe.MatchString(target) {
+		return fmt.Errorf("invalid database identifier: %q", target)
+	}
+
+	cmd := exec.Command("createdb", target)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("creating database %s: %w", target, err)
+	}
+
+	if isCustomFormat(dumpFile) {
+		cmd = exec.Command("pg_restore", "--no-owner", "--no-acl", "-d", target, dumpFile)
+	} else {
+		cmd = exec.Command("psql", "-d", target, "-f", dumpFile)
+	}
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("restoring %s into %s: %w", dumpFile, target, err)
+	}
+	return nil
+}
+
+func isCustomFormat(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = f.Close() }()
+	// pg_dump custom format starts with "PGDMP"
+	header := make([]byte, 5)
+	n, _ := f.Read(header)
+	return n == 5 && string(header) == "PGDMP"
+}
+
 func getTemplateLock(template string) *sync.Mutex {
 	actual, _ := templateLocks.LoadOrStore(template, &sync.Mutex{})
 	return actual.(*sync.Mutex)

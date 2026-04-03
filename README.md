@@ -124,6 +124,42 @@ gtl prune --merged --drop-db
 
 `--stale` removes allocations for worktrees that no longer exist on disk. `--merged` targets branches already merged into the merge target branch. Treeline auto-detects the merge target via git (works with any remote host), but you can set `merge_target` in `.treeline.yml` if your repo uses something other than `main`/`master` (e.g. `develop`, `staging`).
 
+### 8. Manage worktree databases
+
+```bash
+gtl db name                          # print the worktree's database name
+gtl db reset                         # drop and re-clone from the configured template
+gtl db reset --from staging_snapshot # clone from a different database instead
+gtl db restore dump.sql              # drop and restore from a pg_dump file
+gtl db drop                          # just drop the database
+```
+
+`db reset` re-clones from the `database.template` in `.treeline.yml`. Use `--from` to override the source — useful when a teammate has a clean database or you've pulled a sanitized staging dump.
+
+`db restore` auto-detects the dump format (pg_dump custom format vs plain SQL) and uses `pg_restore` or `psql` accordingly.
+
+### 9. Manage user config
+
+```bash
+gtl config list                      # dump all settings
+gtl config get port.base             # read a value (dot notation)
+gtl config set port.base 4000        # write a value
+gtl config path                      # print the config file location
+gtl config edit                      # open in $EDITOR
+```
+
+## Port-dependent data
+
+If your app stores URLs that include the port (e.g., OAuth redirect URIs, webhook endpoints), the cloned database will have stale values pointing to the wrong port. Use `setup_commands` to patch them — setup commands run after the env file is written, so `PORT` is available:
+
+```yaml
+setup_commands:
+  - bundle install --quiet
+  - bin/rails runner "Doorkeeper::Application.update_all(redirect_uri: 'http://localhost:' + ENV['PORT'] + '/oauth/callback')"
+```
+
+This runs on every `gtl setup`, including re-setup after a release/re-allocation.
+
 ## Framework examples
 
 Git Treeline is framework-agnostic. The `.treeline.yml` config adapts to your stack.

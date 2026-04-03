@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 )
 
@@ -51,6 +52,26 @@ func (s *SQLite) Drop(target string) error {
 	// SQLite WAL mode companion files
 	_ = removeIfExists(target + "-wal")
 	_ = removeIfExists(target + "-shm")
+	return nil
+}
+
+func (s *SQLite) Restore(target, dumpFile string) error {
+	if err := s.Drop(target); err != nil {
+		return err
+	}
+	dump, err := os.Open(dumpFile)
+	if err != nil {
+		return fmt.Errorf("opening dump file %s: %w", dumpFile, err)
+	}
+	defer func() { _ = dump.Close() }()
+
+	cmd := exec.Command("sqlite3", target)
+	cmd.Stdin = dump
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("restoring %s into %s: %w", dumpFile, target, err)
+	}
 	return nil
 }
 
