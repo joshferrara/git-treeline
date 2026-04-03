@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+## [0.16.0]
+
+- `gtl start` / `gtl stop` / `gtl restart` — supervised dev server
+  - `start` runs `start_command` from `.treeline.yml` under a Unix socket supervisor
+  - `stop` pauses the server; supervisor stays alive for resume
+  - `start` (again) resumes the server in the original terminal
+  - `restart` atomic bounce — stop + start in one step
+  - Ctrl+C in the terminal fully exits the supervisor
+- Hardened supervisor: socket permissions (0600), read deadlines, `sync.Once` on shutdown, 30s client timeout
+
 ## [0.15.0]
 
 - `gtl db` command group for worktree database management:

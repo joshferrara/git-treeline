@@ -1,0 +1,197 @@
+package supervisor
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestSupervisor_StopAndResume(t *testing.T) {
+	dir := t.TempDir()
+	sock := filepath.Join(dir, "test.sock")
+	marker := filepath.Join(dir, "started")
+
+	cmd := "echo $$ >> " + marker + " && sleep 60"
+	sv := New(cmd, dir, sock)
+	sv.Log = func(f string, a ...any) {}
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- sv.Run() }()
+
+	waitForSocket(t, sock, 2*time.Second)
+	waitForFile(t, marker, 2*time.Second)
+
+	resp, err := Send(sock, "status")
+	if err != nil {
+		t.Fatalf("status failed: %v", err)
+	}
+	if resp != "running" {
+		t.Errorf("expected running, got %s", resp)
+	}
+
+	// Stop child — supervisor stays alive
+	resp, err = Send(sock, "stop")
+	if err != nil {
+		t.Fatalf("stop failed: %v", err)
+	}
+	if resp != "ok" {
+		t.Errorf("expected ok, got %s", resp)
+	}
+
+	time.Sleep(200 * time.Millisecond)
+
+	resp, err = Send(sock, "status")
+	if err != nil {
+		t.Fatalf("status after stop failed: %v", err)
+	}
+	if resp != "stopped" {
+		t.Errorf("expected stopped after stop, got %s", resp)
+	}
+
+	// Resume via start
+	resp, err = Send(sock, "start")
+	if err != nil {
+		t.Fatalf("start failed: %v", err)
+	}
+	if resp != "ok" {
+		t.Errorf("expected ok from start, got %s", resp)
+	}
+
+	time.Sleep(500 * time.Millisecond)
+
+	resp, err = Send(sock, "status")
+	if err != nil {
+		t.Fatalf("status after resume failed: %v", err)
+	}
+	if resp != "running" {
+		t.Errorf("expected running after resume, got %s", resp)
+	}
+
+	data, _ := os.ReadFile(marker)
+	lines := splitNonEmpty(string(data))
+	if len(lines) < 2 {
+		t.Errorf("expected at least 2 PIDs (start + resume), got %d", len(lines))
+	}
+
+	// Shutdown supervisor entirely
+	Send(sock, "shutdown")
+	select {
+	case <-errCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("supervisor didn't exit after shutdown")
+	}
+}
+
+func TestSupervisor_Shutdown(t *testing.T) {
+	dir := t.TempDir()
+	sock := filepath.Join(dir, "test.sock")
+
+	sv := New("sleep 60", dir, sock)
+	sv.Log = func(f string, a ...any) {}
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- sv.Run() }()
+
+	waitForSocket(t, sock, 2*time.Second)
+
+	resp, err := Send(sock, "shutdown")
+	if err != nil {
+		t.Fatalf("shutdown failed: %v", err)
+	}
+	if resp != "ok" {
+		t.Errorf("expected ok, got %s", resp)
+	}
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Errorf("supervisor returned error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("supervisor didn't exit after shutdown")
+	}
+
+	if _, err := os.Stat(sock); !os.IsNotExist(err) {
+		t.Error("expected socket to be cleaned up")
+	}
+}
+
+func TestSupervisor_Restart(t *testing.T) {
+	dir := t.TempDir()
+	sock := filepath.Join(dir, "test.sock")
+	marker := filepath.Join(dir, "started")
+
+	// Command creates a marker file with PID, then sleeps
+	cmd := "echo $$ >> " + marker + " && sleep 60"
+	sv := New(cmd, dir, sock)
+	sv.Log = func(f string, a ...any) {}
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- sv.Run() }()
+
+	waitForSocket(t, sock, 2*time.Second)
+	waitForFile(t, marker, 2*time.Second)
+
+	resp, err := Send(sock, "restart")
+	if err != nil {
+		t.Fatalf("restart failed: %v", err)
+	}
+	if resp != "ok" {
+		t.Errorf("expected ok, got %s", resp)
+	}
+
+	// Wait for second start
+	time.Sleep(500 * time.Millisecond)
+
+	data, _ := os.ReadFile(marker)
+	lines := splitNonEmpty(string(data))
+	if len(lines) < 2 {
+		t.Errorf("expected at least 2 PIDs (start + restart), got %d: %q", len(lines), string(data))
+	}
+
+	Send(sock, "shutdown")
+	<-errCh
+}
+
+func TestSupervisor_StatusWhenStopped(t *testing.T) {
+	_, err := Send("/nonexistent/test.sock", "status")
+	if err == nil {
+		t.Error("expected error connecting to nonexistent socket")
+	}
+}
+
+func waitForSocket(t *testing.T, path string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("socket %s not created within %s", path, timeout)
+}
+
+func waitForFile(t *testing.T, path string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if info, err := os.Stat(path); err == nil && info.Size() > 0 {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("file %s not created within %s", path, timeout)
+}
+
+func splitNonEmpty(s string) []string {
+	var result []string
+	for _, line := range strings.Split(s, "\n") {
+		if strings.TrimSpace(line) != "" {
+			result = append(result, line)
+		}
+	}
+	return result
+}

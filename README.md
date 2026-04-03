@@ -76,8 +76,20 @@ gtl setup ../myapp-feature-x
 
 ```bash
 cd ../myapp-feature-auth
-npm run dev    # or bin/dev, or whatever starts your app
+gtl start
 ```
+
+`gtl start` runs the `start_command` from `.treeline.yml` under a lightweight supervisor. Your server runs in your terminal with full log output — exactly like running `bin/dev` directly. The difference: AI agents and scripts can now control your server without taking over your terminal.
+
+```bash
+gtl stop       # stops the server — supervisor stays alive, ready to resume
+gtl start      # resumes the server in your original terminal
+gtl restart    # bounces the server in one step — logs keep flowing
+```
+
+`stop` + `start` lets agents pause the server, do work (run migrations, install packages), and bring it back — all in your terminal. `restart` is a single-step bounce. Ctrl+C in the terminal exits the supervisor entirely.
+
+The supervisor communicates over a Unix socket. No background processes, no log files, no PID management. Your terminal owns the process; the socket is just a remote control.
 
 Your app starts on 3010. The main copy runs on 3000. No collisions. Some frameworks (Rails, Express) read `PORT` from the env file automatically; others (Next.js) need their dev script wired up — `gtl init` prints framework-specific guidance.
 
@@ -330,7 +342,7 @@ See [Framework examples](#framework-examples) for complete examples. Available f
 | `copy_files` | Files copied from main repo to worktree |
 | `env` | Key-value pairs written to the env file, with token interpolation |
 | `setup_commands` | Shell commands run in the worktree after setup |
-| `start_command` | Command to boot the app (used by `--start` on `new` and `review`) |
+| `start_command` | Whatever you'd type to boot the app — `bin/dev`, `npm run dev`, `foreman start`, etc. (used by `gtl start` and `--start` on `new`/`review`) |
 | `editor.vscode_title` | VS Code window title template |
 
 ### Interpolation tokens
@@ -425,6 +437,9 @@ This returns the full registry as JSON — allocated ports, databases, Redis nam
 | `gtl release [PATH]` | `--drop-db` `--project` `--all` `--force`/`-f` `--dry-run` | Free allocated resources (single, by project, or all) |
 | `gtl status` | `--project` `--json` `--check` `--watch` `--interval` | Show allocations across projects |
 | `gtl prune` | `--stale` `--merged` `--drop-db` `--force` | Remove orphaned allocations |
+| `gtl start` | | Run `start_command` under supervisor (or resume a stopped server) |
+| `gtl stop` | | Stop the server process (supervisor stays alive) |
+| `gtl restart` | | Restart the server process in the original terminal |
 | `gtl config` | | Show or initialize user-level config |
 | `gtl version` | | Print version |
 
