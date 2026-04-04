@@ -323,6 +323,133 @@ func TestReuseExisting_PortCountMismatch(t *testing.T) {
 	}
 }
 
+func TestAllocateMain_UsesReservation(t *testing.T) {
+	dir := t.TempDir()
+	regPath := filepath.Join(dir, "registry.json")
+	reg := registry.New(regPath)
+
+	confPath := filepath.Join(dir, "config.json")
+	_ = os.WriteFile(confPath, []byte(`{
+		"port": {
+			"base": 3000,
+			"increment": 10,
+			"reservations": {"myapp": 4000}
+		},
+		"redis": {"strategy": "prefixed", "url": "redis://localhost:6379"}
+	}`), 0o644)
+	uc := config.LoadUserConfig(confPath)
+
+	projDir := filepath.Join(dir, "project")
+	_ = os.MkdirAll(projDir, 0o755)
+	_ = os.WriteFile(filepath.Join(projDir, ".treeline.yml"), []byte("project: myapp\n"), 0o644)
+	pc := config.LoadProjectConfig(projDir)
+
+	al := New(uc, pc, reg)
+	alloc, err := al.Allocate("/repo/main", "main", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if alloc.Port != 4000 {
+		t.Errorf("expected reserved port 4000, got %d", alloc.Port)
+	}
+}
+
+func TestAllocateMain_NoReservation_FallsBack(t *testing.T) {
+	dir := t.TempDir()
+	regPath := filepath.Join(dir, "registry.json")
+	reg := registry.New(regPath)
+
+	confPath := filepath.Join(dir, "config.json")
+	_ = os.WriteFile(confPath, []byte(`{
+		"port": {
+			"base": 3000,
+			"increment": 10,
+			"reservations": {"other": 4000}
+		},
+		"redis": {"strategy": "prefixed", "url": "redis://localhost:6379"}
+	}`), 0o644)
+	uc := config.LoadUserConfig(confPath)
+
+	projDir := filepath.Join(dir, "project")
+	_ = os.MkdirAll(projDir, 0o755)
+	_ = os.WriteFile(filepath.Join(projDir, ".treeline.yml"), []byte("project: myapp\n"), 0o644)
+	pc := config.LoadProjectConfig(projDir)
+
+	al := New(uc, pc, reg)
+	alloc, err := al.Allocate("/repo/main", "main", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if alloc.Port == 4000 {
+		t.Error("expected dynamic port, not another project's reservation")
+	}
+}
+
+func TestAllocateNew_SkipsReservedPorts(t *testing.T) {
+	dir := t.TempDir()
+	regPath := filepath.Join(dir, "registry.json")
+	reg := registry.New(regPath)
+
+	confPath := filepath.Join(dir, "config.json")
+	_ = os.WriteFile(confPath, []byte(`{
+		"port": {
+			"base": 3000,
+			"increment": 10,
+			"reservations": {"other": 3010}
+		},
+		"redis": {"strategy": "prefixed", "url": "redis://localhost:6379"}
+	}`), 0o644)
+	uc := config.LoadUserConfig(confPath)
+
+	projDir := filepath.Join(dir, "project")
+	_ = os.MkdirAll(projDir, 0o755)
+	_ = os.WriteFile(filepath.Join(projDir, ".treeline.yml"), []byte("project: myapp\n"), 0o644)
+	pc := config.LoadProjectConfig(projDir)
+
+	al := New(uc, pc, reg)
+	alloc, err := al.Allocate("/repo/wt", "wt", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if alloc.Port == 3010 {
+		t.Error("worktree should skip reserved port 3010")
+	}
+}
+
+func TestReservation_WithMultiplePorts(t *testing.T) {
+	dir := t.TempDir()
+	regPath := filepath.Join(dir, "registry.json")
+	reg := registry.New(regPath)
+
+	confPath := filepath.Join(dir, "config.json")
+	_ = os.WriteFile(confPath, []byte(`{
+		"port": {
+			"base": 3000,
+			"increment": 10,
+			"reservations": {"myapp": 5000}
+		},
+		"redis": {"strategy": "prefixed", "url": "redis://localhost:6379"}
+	}`), 0o644)
+	uc := config.LoadUserConfig(confPath)
+
+	projDir := filepath.Join(dir, "project")
+	_ = os.MkdirAll(projDir, 0o755)
+	_ = os.WriteFile(filepath.Join(projDir, ".treeline.yml"), []byte("project: myapp\nports_needed: 2\n"), 0o644)
+	pc := config.LoadProjectConfig(projDir)
+
+	al := New(uc, pc, reg)
+	alloc, err := al.Allocate("/repo/main", "main", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if alloc.Port != 5000 {
+		t.Errorf("expected reserved port 5000, got %d", alloc.Port)
+	}
+	if len(alloc.Ports) != 2 || alloc.Ports[1] != 5001 {
+		t.Errorf("expected [5000, 5001], got %v", alloc.Ports)
+	}
+}
+
 func TestIsPortFree(t *testing.T) {
 	if !IsPortFree(49999) {
 		t.Skip("port 49999 is in use, skipping")

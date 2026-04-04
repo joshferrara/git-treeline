@@ -51,6 +51,32 @@ func (uc *UserConfig) PortIncrement() int {
 	return 10
 }
 
+func (uc *UserConfig) PortReservations() map[string]int {
+	raw, ok := Dig(uc.Data, "port", "reservations").(map[string]any)
+	if !ok {
+		return nil
+	}
+	result := make(map[string]int, len(raw))
+	for project, v := range raw {
+		if f, ok := v.(float64); ok {
+			result[project] = int(f)
+		}
+	}
+	return result
+}
+
+func (uc *UserConfig) ReservedPorts() map[int]bool {
+	reservations := uc.PortReservations()
+	if len(reservations) == 0 {
+		return nil
+	}
+	set := make(map[int]bool, len(reservations))
+	for _, port := range reservations {
+		set[port] = true
+	}
+	return set
+}
+
 func (uc *UserConfig) RedisStrategy() string {
 	v := Dig(uc.Data, "redis", "strategy")
 	if s, ok := v.(string); ok {

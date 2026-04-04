@@ -358,13 +358,25 @@ Controls allocation policy for your machine. Created automatically by `gtl init`
 {
   "port": {
     "base": 3000,
-    "increment": 10
+    "increment": 10,
+    "reservations": {
+      "salt": 3000,
+      "truherd": 3002,
+      "api-docs": 3004
+    }
   },
   "redis": {
     "strategy": "prefixed",
     "url": "redis://localhost:6379"
   }
 }
+```
+
+**Port reservations** pin a project's main branch to a stable port. When `gtl setup` runs on a main repo with a reservation, it uses the reserved port instead of allocating dynamically. Worktrees still get dynamic ports, and reserved ports are excluded from the dynamic pool so they never collide.
+
+```bash
+gtl config set port.reservations.salt 3000
+gtl config set port.reservations.truherd 3002
 ```
 
 User config and registry live at the platform-appropriate location:

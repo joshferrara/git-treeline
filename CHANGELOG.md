@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+- **Port reservations** — pin a project's main branch to a stable port via `port.reservations` in user config. Reserved ports are excluded from the dynamic pool so worktrees never collide with them.
+- **Fix: stale port reuse** — re-running `gtl setup` after changing `ports_needed` in config now correctly re-allocates instead of reusing the old port count.
+- **Fix: `ProjectDefaults` env_file** — defaults now use the string shorthand form, matching the canonical config shape.
+- **Self-documenting templates** — `gtl init` generates `.treeline.yml` with commented-out optional config (ports_needed, Redis, editor, etc.) so available features are discoverable without reading docs. `ports_needed: 2` is never auto-emitted as active config.
+
 ## [0.19.0]
 
 ### New

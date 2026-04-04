@@ -150,10 +150,21 @@ func (al *Allocator) allocateMain(worktreePath, worktreeName string) (*Allocatio
 			count, al.UserConfig.PortIncrement(), count)
 	}
 
-	ports := al.nextAvailablePortsFrom(al.UserConfig.PortBase(), count)
+	project := al.ProjectConfig.Project()
+	reservations := al.UserConfig.PortReservations()
+
+	var ports []int
+	if reserved, ok := reservations[project]; ok {
+		ports = make([]int, count)
+		for i := range count {
+			ports[i] = reserved + i
+		}
+	} else {
+		ports = al.nextAvailablePortsFrom(al.UserConfig.PortBase(), count)
+	}
 
 	return &Allocation{
-		Project:         al.ProjectConfig.Project(),
+		Project:         project,
 		Worktree:        worktreePath,
 		WorktreeName:    worktreeName,
 		Port:            ports[0],
@@ -197,6 +208,7 @@ func (al *Allocator) nextAvailablePortsFrom(start, count int) []int {
 	for _, p := range al.Registry.UsedPorts() {
 		usedSet[p] = true
 	}
+	reserved := al.UserConfig.ReservedPorts()
 
 	candidate := start
 	for {
@@ -205,7 +217,7 @@ func (al *Allocator) nextAvailablePortsFrom(start, count int) []int {
 		for i := range count {
 			port := candidate + i
 			block[i] = port
-			if usedSet[port] || !IsPortFree(port) {
+			if usedSet[port] || reserved[port] || !IsPortFree(port) {
 				conflict = true
 			}
 		}
