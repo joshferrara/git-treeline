@@ -11,6 +11,8 @@ import (
 )
 
 type PRInfo struct {
+	Number      int    `json:"number"`
+	Title       string `json:"title"`
 	HeadRefName string `json:"headRefName"`
 }
 
@@ -39,6 +41,24 @@ func LookupPR(number int) (*PRInfo, error) {
 		return nil, fmt.Errorf("PR #%d has no head branch", number)
 	}
 	return &info, nil
+}
+
+// ListOpenPRs returns open PRs via the gh CLI. Returns nil on any failure
+// (gh not installed, not in a repo, network error) to keep tab completion non-blocking.
+func ListOpenPRs() ([]PRInfo, error) {
+	if err := checkGH(); err != nil {
+		return nil, err
+	}
+	cmd := exec.Command("gh", "pr", "list", "--json", "number,title,headRefName", "--limit", "50")
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, nil
+	}
+	var prs []PRInfo
+	if err := json.Unmarshal(out, &prs); err != nil {
+		return nil, nil
+	}
+	return prs, nil
 }
 
 func checkGH() error {

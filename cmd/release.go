@@ -72,8 +72,32 @@ func runReleaseSingle(args []string) error {
 		os.Exit(1)
 	}
 
+	fa := format.Allocation(alloc)
+	ports := format.GetPorts(fa)
+	name := format.DisplayName(fa)
+	db := format.GetStr(fa, "database")
+
+	line := fmt.Sprintf("Release: %s", name)
+	if len(ports) > 0 {
+		line += fmt.Sprintf("  (port %s)", format.JoinInts(ports, ", "))
+	}
+	if db != "" {
+		line += fmt.Sprintf("  db:%s", db)
+	}
+	fmt.Println(line)
+
+	if releaseDryRun {
+		fmt.Println("Would release. (dry-run)")
+		return nil
+	}
+
+	if !confirm.Prompt("Release?", releaseForce, nil) {
+		fmt.Println("Aborted.")
+		return nil
+	}
+
 	if releaseDropDB {
-		format.DropSingleDB(format.Allocation(alloc), absPath)
+		format.DropSingleDB(fa, absPath)
 	}
 
 	if _, err := reg.Release(absPath); err != nil {
@@ -81,13 +105,12 @@ func runReleaseSingle(args []string) error {
 	}
 	fmt.Printf("==> Released resources for %s\n", filepath.Base(absPath))
 
-	ports := format.GetPorts(format.Allocation(alloc))
 	if len(ports) > 1 {
 		fmt.Printf("  Ports:    %s\n", format.JoinInts(ports, ", "))
 	} else if len(ports) == 1 {
 		fmt.Printf("  Port:     %d\n", ports[0])
 	}
-	if db, ok := alloc["database"].(string); ok && db != "" {
+	if db != "" {
 		fmt.Printf("  Database: %s\n", db)
 	}
 

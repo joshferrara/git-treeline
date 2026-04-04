@@ -95,7 +95,17 @@ The supervisor communicates over a Unix socket. No background processes, no log 
 
 Your app starts on 3010. The main copy runs on 3000. No collisions. Some frameworks (Rails, Express) read `PORT` from the env file automatically; others (Next.js) need their dev script wired up — `gtl init` prints framework-specific guidance.
 
-### 4. Review a pull request
+### 4. Switch branches in a worktree
+
+```bash
+gtl switch feature-payments
+gtl switch 42                  # accepts a PR number (resolved via gh)
+gtl switch 42 --setup          # re-run setup commands after switching
+```
+
+Fetches from origin, checks out the branch, updates the registry, and refreshes the env file. Like `git switch` but Treeline-aware — handles fetch, env refresh, and PR lookup in one step.
+
+### 5. Review a pull request
 
 ```bash
 gtl review 42 --start
@@ -103,7 +113,17 @@ gtl review 42 --start
 
 Fetches the PR branch via `gh`, creates a worktree, allocates resources, runs setup, and boots the app. Requires the [gh CLI](https://cli.github.com).
 
-### 5. Check what's allocated
+`review` and `new` must be run from the main repo, not from inside a worktree. If you're in a worktree and want to change branches, use `gtl switch`.
+
+### 6. Check project health
+
+```bash
+gtl doctor
+```
+
+Checks config, allocation, runtime, and diagnostics in one view — whether `.treeline.yml` exists, env file is on disk, ports are allocated and listening, supervisor is running, and framework-specific guidance.
+
+### 8. Check what's allocated
 
 ```bash
 gtl status
@@ -120,7 +140,7 @@ api-service:
 
 Use `--check` to probe ports and show which services are running. Use `--watch` for a live-updating dashboard.
 
-### 6. Release when done
+### 9. Release when done
 
 ```bash
 gtl release ../myapp-feature-auth --drop-db
@@ -129,7 +149,7 @@ git worktree remove ../myapp-feature-auth
 
 For bulk cleanup: `gtl release --project myapp --drop-db` or `gtl release --all --drop-db`.
 
-### 7. Prune stale allocations
+### 10. Prune stale allocations
 
 ```bash
 gtl prune --stale
@@ -138,7 +158,7 @@ gtl prune --merged --drop-db
 
 `--stale` removes allocations for worktrees that no longer exist on disk. `--merged` targets branches already merged into the merge target branch. Treeline auto-detects the merge target via git (works with any remote host), but you can set `merge_target` in `.treeline.yml` if your repo uses something other than `main`/`master` (e.g. `develop`, `staging`).
 
-### 8. Manage worktree databases
+### 11. Manage worktree databases
 
 ```bash
 gtl db name                          # print the worktree's database name
@@ -152,7 +172,7 @@ gtl db drop                          # just drop the database
 
 `db restore` auto-detects the dump format (pg_dump custom format vs plain SQL) and uses `pg_restore` or `psql` accordingly.
 
-### 9. Manage user config
+### 12. Manage user config
 
 ```bash
 gtl config list                      # dump all settings
@@ -184,9 +204,7 @@ Git Treeline is framework-agnostic. The `.treeline.yml` config adapts to your st
 ```yaml
 project: myapp
 
-env_file:
-  target: .env.local
-  source: .env.local
+env_file: .env.local
 
 env:
   PORT: "{port}"
@@ -211,9 +229,7 @@ Next.js loads `.env.local` into `process.env` for your app code, but the dev ser
 ```yaml
 project: myapp
 
-env_file:
-  target: .env.local
-  source: .env.local
+env_file: .env.local
 
 env:
   PORT: "{port}"
@@ -237,9 +253,7 @@ commands:
 ```yaml
 project: website
 
-env_file:
-  target: .env.local
-  source: .env.local
+env_file: .env.local
 
 env:
   PORT: "{port}"
@@ -267,9 +281,7 @@ export default defineConfig(({ mode }) => {
 ```yaml
 project: myapi
 
-env_file:
-  target: .env
-  source: .env.example
+env_file: .env
 
 env:
   PORT: "{port}"
@@ -280,6 +292,14 @@ commands:
   start: node server.js
 ```
 
+When the env file written by Treeline differs from the one seeded from the main repo, use the extended form:
+
+```yaml
+env_file:
+  path: .env
+  seed_from: .env.example
+```
+
 ### Rails
 
 ```yaml
@@ -287,9 +307,7 @@ project: myapp
 merge_target: develop     # branch that prune --merged checks against (auto-detected if omitted)
 ports_needed: 2
 
-env_file:
-  target: .env.local
-  source: .env.local
+env_file: .env.local
 
 database:
   adapter: postgresql
@@ -320,9 +338,7 @@ Rails apps using `dotenv-rails` (most do) will load the env file automatically a
 ```yaml
 project: dashboard
 
-env_file:
-  target: .env.local
-  source: .env.local
+env_file: .env.local
 
 env:
   PORT: "{port}"
@@ -368,8 +384,7 @@ See [Framework examples](#framework-examples) for complete examples. Available f
 | `project` | Project name (defaults to directory name) |
 | `merge_target` | Branch that `prune --merged` checks against (auto-detected if omitted) |
 | `ports_needed` | Number of contiguous ports per worktree (default: 1) |
-| `env_file.target` | Env file written in the worktree |
-| `env_file.source` | Env file copied from main repo as a starting point |
+| `env_file` | Env file path (string shorthand, e.g. `.env.local`) — or map with `path` and `seed_from` when they differ |
 | `database.adapter` | `postgresql` or `sqlite` |
 | `database.template` | Source database to clone from (omit if no DB needed) |
 | `database.pattern` | Naming pattern — `{template}_{worktree}` |
@@ -466,9 +481,11 @@ This returns the full registry as JSON — allocated ports, databases, Redis nam
 | `gtl init` | `--project` `--template-db` `--skip-agent-config` | Generate `.treeline.yml` (auto-detects framework and creates agent context files) |
 | `gtl new <branch>` | `--base` `--path` `--start` `--dry-run` | Create worktree + allocate + setup in one step |
 | `gtl review <PR#>` | `--path` `--start` | Check out a GitHub PR into a worktree with full setup (requires `gh`) |
+| `gtl switch <branch-or-PR#>` | `--setup` | Switch worktree to a different branch or PR — fetches, checks out, refreshes env |
 | `gtl setup [PATH]` | `--main-repo` `--dry-run` | Allocate resources and configure a worktree (idempotent) |
 | `gtl refresh [PATH]` | | Re-interpolate env file from existing allocation |
-| `gtl release [PATH]` | `--drop-db` `--project` `--all` `--force`/`-f` `--dry-run` | Free allocated resources (single, by project, or all) |
+| `gtl release [PATH]` | `--drop-db` `--project` `--all` `--force`/`-f` `--dry-run` | Free allocated resources (confirms before releasing unless `--force`) |
+| `gtl doctor` | | Check config, allocation, runtime, and diagnostics |
 | `gtl status` | `--project` `--json` `--check` `--watch` `--interval` | Show allocations across projects |
 | `gtl prune` | `--stale` `--merged` `--drop-db` `--force` | Remove orphaned allocations |
 | `gtl start` | | Run `commands.start` under supervisor (or resume a stopped server) |

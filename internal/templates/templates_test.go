@@ -235,8 +235,7 @@ func TestForDetection_Rails_EnvDevelopment(t *testing.T) {
 	content := ForDetection("myapp", "myapp_dev", det)
 
 	assertValidYAML(t, content)
-	assertContains(t, content, "source: .env.development")
-	assertContains(t, content, "target: .env.development")
+	assertContains(t, content, "env_file: .env.development")
 	assertNotContains(t, content, ".env.local")
 }
 
@@ -250,8 +249,7 @@ func TestForDetection_NextJS_EnvDevelopment(t *testing.T) {
 	content := ForDetection("myapp", "myapp_dev", det)
 
 	assertValidYAML(t, content)
-	assertContains(t, content, "source: .env.development")
-	assertContains(t, content, "target: .env.development")
+	assertContains(t, content, "env_file: .env.development")
 }
 
 func TestForDetection_Vite(t *testing.T) {
@@ -263,8 +261,7 @@ func TestForDetection_Vite(t *testing.T) {
 
 	assertValidYAML(t, content)
 	assertContains(t, content, "project: website")
-	assertContains(t, content, "env_file:")
-	assertContains(t, content, "target: .env.local")
+	assertContains(t, content, "env_file: .env.local")
 	assertContains(t, content, `PORT: "{port}"`)
 	assertContains(t, content, "commands:")
 	assertContains(t, content, "npm install")
@@ -281,7 +278,7 @@ func TestForDetection_Vite_NoEnvFile_StillEmitsEnv(t *testing.T) {
 	content := ForDetection("myapp", "", det)
 
 	assertValidYAML(t, content)
-	assertContains(t, content, "env_file:")
+	assertContains(t, content, "env_file: .env.local")
 	assertContains(t, content, `PORT: "{port}"`)
 }
 
@@ -294,8 +291,7 @@ func TestForDetection_NextJS_NoEnvFile_StillEmitsEnv(t *testing.T) {
 	content := ForDetection("myapp", "myapp_dev", det)
 
 	assertValidYAML(t, content)
-	assertContains(t, content, "env_file:")
-	assertContains(t, content, "target: .env.local")
+	assertContains(t, content, "env_file: .env.local")
 }
 
 func TestForDetection_Node_NoEnvFile_NoDotenv_NoEnvBlock(t *testing.T) {
@@ -320,7 +316,7 @@ func TestForDetection_Node_NoDotenv_WithEnvFile_EmitsEnv(t *testing.T) {
 	content := ForDetection("myapp", "", det)
 
 	assertValidYAML(t, content)
-	assertContains(t, content, "env_file:")
+	assertContains(t, content, "env_file: .env")
 }
 
 func TestDiagnose_Vite(t *testing.T) {

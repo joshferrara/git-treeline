@@ -200,9 +200,7 @@ func generic(project string, det *detect.Result) string {
 }
 
 func writeEnvFileBlock(b *strings.Builder, envFile string) {
-	b.WriteString("\nenv_file:\n")
-	fmt.Fprintf(b, "  target: %s\n", envFile)
-	fmt.Fprintf(b, "  source: %s\n", envFile)
+	fmt.Fprintf(b, "\nenv_file: %s\n", envFile)
 }
 
 // shouldEmitEnv returns true if the template should include env_file and env blocks.

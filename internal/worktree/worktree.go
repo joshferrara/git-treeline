@@ -208,6 +208,40 @@ func WorktreeBranches(repoPath string) map[string]string {
 	return result
 }
 
+// Checkout switches the current directory's worktree to a different branch.
+func Checkout(branch string) error {
+	cmd := exec.Command("git", "checkout", branch)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git checkout failed: %s", strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// ListBranches returns branch names matching the given prefix.
+// Lists both local and remote branches, deduplicating origin/ variants.
+func ListBranches(prefix string) []string {
+	cmd := exec.Command("git", "branch", "-a", "--format=%(refname:short)")
+	out, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	var result []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		name := strings.TrimPrefix(line, "origin/")
+		if name == "" || name == "HEAD" || seen[name] {
+			continue
+		}
+		if prefix == "" || strings.HasPrefix(name, prefix) {
+			seen[name] = true
+			result = append(result, name)
+		}
+	}
+	return result
+}
+
 // DetectMainRepo returns the root worktree path (the main repo) by parsing
 // `git worktree list --porcelain`. Falls back to the given path.
 func DetectMainRepo(worktreePath string) string {

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,6 +39,7 @@ func LoadProjectConfig(projectRoot string) *ProjectConfig {
 	pc.Data = pc.load()
 	pc.migrateDefaultBranch()
 	pc.migrateCommands()
+	pc.migrateEnvFile()
 	return pc
 }
 
@@ -88,6 +90,12 @@ func (pc *ProjectConfig) HasEnvFileConfig() bool {
 }
 
 func (pc *ProjectConfig) EnvFileTarget() string {
+	if s, ok := pc.Data["env_file"].(string); ok {
+		return s
+	}
+	if v, ok := Dig(pc.Data, "env_file", "path").(string); ok {
+		return v
+	}
 	if v, ok := Dig(pc.Data, "env_file", "target").(string); ok {
 		return v
 	}
@@ -95,6 +103,12 @@ func (pc *ProjectConfig) EnvFileTarget() string {
 }
 
 func (pc *ProjectConfig) EnvFileSource() string {
+	if s, ok := pc.Data["env_file"].(string); ok {
+		return s
+	}
+	if v, ok := Dig(pc.Data, "env_file", "seed_from").(string); ok {
+		return v
+	}
 	if v, ok := Dig(pc.Data, "env_file", "source").(string); ok {
 		return v
 	}
@@ -302,6 +316,79 @@ func appendCommandsBlock(lines []string, key string, items []string) []string {
 		result = append(result, "  "+item)
 	}
 	return result
+}
+
+// migrateEnvFile rewrites env_file from the old target/source map form to the
+// new string shorthand or path/seed_from map. Idempotent.
+func (pc *ProjectConfig) migrateEnvFile() {
+	m, ok := pc.Data["env_file"].(map[string]any)
+	if !ok {
+		return
+	}
+	target, _ := m["target"].(string)
+	source, _ := m["source"].(string)
+	if target == "" || m["path"] != nil {
+		return
+	}
+
+	path := pc.configPath()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	content := string(raw)
+
+	var newContent string
+	if target == source || source == "" {
+		newContent = rewriteEnvFileToSimple(content, target)
+	} else {
+		newContent = rewriteEnvFileToExtended(content, target, source)
+	}
+
+	if newContent == content {
+		return
+	}
+
+	if target == source || source == "" {
+		pc.Data["env_file"] = target
+	} else {
+		pc.Data["env_file"] = map[string]any{"path": target, "seed_from": source}
+	}
+	_ = os.WriteFile(path, []byte(newContent), 0o644)
+}
+
+// rewriteEnvFileToSimple collapses the block-style env_file to a single line.
+func rewriteEnvFileToSimple(content, target string) string {
+	return rewriteEnvFileBlock(content, fmt.Sprintf("env_file: %s", target))
+}
+
+// rewriteEnvFileToExtended renames target/source keys to path/seed_from.
+func rewriteEnvFileToExtended(content, target, seedFrom string) string {
+	replacement := fmt.Sprintf("env_file:\n  path: %s\n  seed_from: %s", target, seedFrom)
+	return rewriteEnvFileBlock(content, replacement)
+}
+
+func rewriteEnvFileBlock(content, replacement string) string {
+	lines := strings.Split(content, "\n")
+	var out []string
+	skip := false
+
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "env_file:" {
+			out = append(out, replacement)
+			skip = true
+			continue
+		}
+		if skip {
+			if line == "" || (len(line) > 0 && line[0] != ' ' && line[0] != '\t') {
+				skip = false
+				out = append(out, line)
+			}
+			continue
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
 }
 
 func (pc *ProjectConfig) configPath() string {

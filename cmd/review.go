@@ -21,6 +21,7 @@ var reviewStart bool
 func init() {
 	reviewCmd.Flags().StringVar(&reviewPath, "path", "", "Custom worktree path (default: ../<project>-pr-<number>)")
 	reviewCmd.Flags().BoolVar(&reviewStart, "start", false, "Run commands.start after setup")
+	reviewCmd.ValidArgsFunction = completePRs
 	rootCmd.AddCommand(reviewCmd)
 }
 
@@ -31,6 +32,10 @@ var reviewCmd = &cobra.Command{
 resources, and run setup. Requires the gh CLI (https://cli.github.com).`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := worktreeGuard(cmd, args); err != nil {
+			return err
+		}
+
 		prNumber, err := strconv.Atoi(args[0])
 		if err != nil {
 			return fmt.Errorf("invalid PR number: %s", args[0])
@@ -120,4 +125,17 @@ func printExistingAllocation(prNumber int, branch, path string, alloc registry.A
 		fmt.Printf("  Port:     %s\n", format.JoinInts(ports, ", "))
 		fmt.Printf("  URL:      http://localhost:%d\n", ports[0])
 	}
+}
+
+func completePRs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if len(args) > 0 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	var completions []string
+	if prs, err := github.ListOpenPRs(); err == nil {
+		for _, pr := range prs {
+			completions = append(completions, fmt.Sprintf("%d\t%s", pr.Number, pr.Title))
+		}
+	}
+	return completions, cobra.ShellCompDirectiveNoFileComp
 }

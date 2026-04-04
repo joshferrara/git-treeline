@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/git-treeline/git-treeline/internal/config"
 	"github.com/git-treeline/git-treeline/internal/setup"
@@ -22,6 +23,7 @@ func init() {
 	newCmd.Flags().StringVar(&newPath, "path", "", "Custom worktree path (default: ../<project>-<branch>)")
 	newCmd.Flags().BoolVar(&newStart, "start", false, "Run commands.start after setup")
 	newCmd.Flags().BoolVar(&newDryRun, "dry-run", false, "Print what would happen without making changes")
+	newCmd.ValidArgsFunction = completeBranches
 	rootCmd.AddCommand(newCmd)
 }
 
@@ -35,6 +37,10 @@ If the branch already exists locally or on origin, it is checked out.
 Otherwise a new branch is created from --base (or the current branch).`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := worktreeGuard(cmd, args); err != nil {
+			return err
+		}
+
 		branch := args[0]
 
 		cwd, err := os.Getwd()
@@ -128,6 +134,30 @@ func currentBranch() string {
 	return string(out[:len(out)-1]) // trim trailing newline
 }
 
+// worktreeGuard returns an error if the cwd is inside a worktree rather than
+// the main repo. Prevents gtl new / gtl review from creating sibling worktrees.
+func worktreeGuard(cmd *cobra.Command, args []string) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("getting working directory: %w", err)
+	}
+	absPath, _ := filepath.Abs(cwd)
+	mainRepo := worktree.DetectMainRepo(absPath)
+
+	resolvedAbs, _ := filepath.EvalSymlinks(absPath)
+	resolvedMain, _ := filepath.EvalSymlinks(mainRepo)
+	if resolvedAbs != resolvedMain {
+		return fmt.Errorf("you're inside worktree '%s', not the main repo.\n\n"+
+			"  To switch this worktree to a different branch:\n"+
+			"    gtl switch <branch-or-PR#>\n\n"+
+			"  To create a new worktree, run from the main repo:\n"+
+			"    cd %s\n"+
+			"    gtl %s %s",
+			filepath.Base(absPath), mainRepo, cmd.Name(), strings.Join(args, " "))
+	}
+	return nil
+}
+
 func execInWorktree(dir, command string) error {
 	cmd := exec.Command("sh", "-c", command)
 	cmd.Dir = dir
@@ -135,4 +165,11 @@ func execInWorktree(dir, command string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+func completeBranches(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if len(args) > 0 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	return worktree.ListBranches(toComplete), cobra.ShellCompDirectiveNoFileComp
 }

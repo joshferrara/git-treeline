@@ -1,5 +1,20 @@
 ## [Unreleased]
 
+## [0.19.0]
+
+### New
+
+- **`gtl switch`** — switch a worktree to a different branch or PR in one step. Accepts branch names or PR numbers (resolved via `gh`). Fetches from origin, checks out the branch, updates the registry, and refreshes the env file. Use `--setup` to re-run `commands.setup` after switching.
+- **`gtl doctor`** — check project config, allocation, runtime, and diagnostics in one view. Reports on `.treeline.yml` presence, env file status, port allocation, supervisor state, and framework-specific guidance.
+- **Tab completion** — `gtl new`, `gtl review`, and `gtl switch` now provide shell completions for branch names and PR numbers.
+- **`gtl release` confirmation** — single-worktree releases now show what will be released and prompt for confirmation. Use `--force` to skip.
+- **Worktree guard** — `gtl new` and `gtl review` now error if run from inside a worktree (which would create confusing sibling worktrees). Suggests `gtl switch` or navigating to the main repo instead.
+
+### Changed
+
+- **Simplified `env_file` config** — `env_file: .env.local` now works as a string shorthand (replaces the old `target:`/`source:` map). For cases where the written file differs from the seed, use `path:`/`seed_from:`. Old configs are auto-migrated on first load.
+- Templates now emit the simplified `env_file` string form.
+
 ## [0.18.0]
 
 ### New
