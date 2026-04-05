@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/git-treeline/git-treeline/internal/config"
+	"github.com/git-treeline/git-treeline/internal/proxy"
+	"github.com/git-treeline/git-treeline/internal/service"
 	"github.com/git-treeline/git-treeline/internal/setup"
 	"github.com/git-treeline/git-treeline/internal/worktree"
 	"github.com/spf13/cobra"
@@ -104,8 +106,23 @@ Otherwise a new branch is created from --base (or the current branch).`,
 		uc := config.LoadUserConfig("")
 		s := setup.New(wtPath, mainRepo, uc)
 		s.Options.DryRun = false
-		if _, err := s.Run(); err != nil {
+		alloc, err := s.Run()
+		if err != nil {
 			return fmt.Errorf("setup failed: %w", err)
+		}
+
+		if service.IsRunning() {
+			routeKey := proxy.RouteKey(projectName, alloc.Branch)
+			if service.IsPortForwardConfigured() {
+				fmt.Printf("==> Router: https://%s.localhost\n", routeKey)
+			} else {
+				port := uc.RouterPort()
+				fmt.Printf("==> Router: https://%s.localhost:%d\n", routeKey, port)
+			}
+		}
+		if domain := uc.TunnelDomain(); domain != "" {
+			routeKey := proxy.RouteKey(projectName, alloc.Branch)
+			fmt.Printf("==> Tunnel: gtl tunnel → https://%s.%s\n", routeKey, domain)
 		}
 
 		if newStart {

@@ -570,10 +570,13 @@ gtl release . --drop-db
 Use `--json` for machine-readable output:
 
 ```bash
-gtl status --json
+gtl status --json          # allocations + supervisor state + port listening
+gtl doctor --json          # config, allocation, runtime, diagnostics
+gtl port --json            # {"port": 3000, "ports": [3000, 3001]}
+gtl db name --json         # {"database": "myapp_feature_xyz"}
 ```
 
-This returns the full registry as JSON — allocated ports, databases, Redis namespaces, and worktree paths. Useful for agent orchestrators that need to know what's running where.
+`gtl status --json` automatically probes port listening and supervisor state for each allocation — no `--check` flag needed.
 
 ### Conductor
 
@@ -594,9 +597,9 @@ This returns the full registry as JSON — allocated ports, databases, Redis nam
 | `gtl switch <branch-or-PR#>` | `--setup` | Switch worktree to a different branch or PR — fetches, checks out, refreshes env |
 | `gtl setup [PATH]` | `--main-repo` `--dry-run` | Allocate resources and configure a worktree (idempotent) |
 | `gtl release [PATH]` | `--drop-db` `--project` `--all` `--force`/`-f` `--dry-run` | Free allocated resources (confirms before releasing unless `--force`) |
-| `gtl port` | | Print the allocated port for the current worktree |
+| `gtl port` | `--json` | Print the allocated port for the current worktree |
 | `gtl refresh` | `--dry-run` `--force`/`-f` | Re-allocate all worktrees with current reservations; restarts supervised servers |
-| `gtl doctor` | | Check config, allocation, runtime, and diagnostics |
+| `gtl doctor` | `--json` | Check config, allocation, runtime, and diagnostics |
 | `gtl status` | `--project` `--json` `--check` `--watch` `--interval` | Show allocations across projects |
 | `gtl prune` | `--stale` `--merged` `--drop-db` `--force` | Remove orphaned allocations |
 | `gtl start` | | Run `commands.start` under supervisor (or resume a stopped server) |
@@ -611,7 +614,7 @@ This returns the full registry as JSON — allocated ports, databases, Redis nam
 | `gtl tunnel setup` | | Interactive setup for named tunnels with BYO domain |
 | `gtl tunnel status` | | Show tunnel configuration and readiness |
 | `gtl config` | | Show or initialize user-level config |
-| `gtl db` | `name` `reset` `restore` `drop` | Manage worktree databases |
+| `gtl db` | `name` `reset` `restore` `drop` — `name --json` | Manage worktree databases |
 | `gtl mcp` | | MCP server for AI agents (started automatically by your editor) |
 | `gtl version` | | Print version |
 

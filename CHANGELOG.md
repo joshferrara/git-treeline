@@ -1,3 +1,8 @@
+## [0.26.0]
+
+- **`--json` everywhere** — `gtl doctor`, `gtl port`, and `gtl db name` now accept `--json` for structured output. `gtl status --json` auto-probes port listening and supervisor state without requiring `--check`.
+- **`gtl new` shows serve URL** — after creating a worktree, `gtl new` prints the HTTPS router URL when `gtl serve` is running, matching the behavior of `gtl setup`.
+
 ## [0.25.0]
 
 - **AI agent integration** — git-treeline now speaks MCP (Model Context Protocol). Add it to your editor's MCP config and agents can query allocations, check health, read config, get database names, and control the dev server — all via structured JSON. Exposes 9 tools and 2 resources.

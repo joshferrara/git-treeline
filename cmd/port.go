@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,7 +11,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var portJSON bool
+
 func init() {
+	portCmd.Flags().BoolVar(&portJSON, "json", false, "Output as JSON")
 	rootCmd.AddCommand(portCmd)
 }
 
@@ -37,6 +41,15 @@ var portCmd = &cobra.Command{
 		if len(ports) == 0 {
 			fmt.Fprintln(os.Stderr, "Allocation exists but has no ports.")
 			os.Exit(1)
+		}
+
+		if portJSON {
+			data, _ := json.MarshalIndent(map[string]any{
+				"port":  ports[0],
+				"ports": ports,
+			}, "", "  ")
+			fmt.Println(string(data))
+			return nil
 		}
 
 		fmt.Println(ports[0])

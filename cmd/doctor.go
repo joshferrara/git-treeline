@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,7 +18,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var doctorJSON bool
+
 func init() {
+	doctorCmd.Flags().BoolVar(&doctorJSON, "json", false, "Output as JSON")
 	rootCmd.AddCommand(doctorCmd)
 }
 
@@ -34,6 +38,10 @@ var doctorCmd = &cobra.Command{
 		det := detect.Detect(absPath)
 		pc := config.LoadProjectConfig(mainRepo)
 
+		if doctorJSON {
+			return doctorJSONOutput(pc, det, absPath)
+		}
+
 		doctorConfig(pc, det, absPath)
 		doctorAllocation(absPath)
 		doctorRuntime(absPath)
@@ -41,6 +49,68 @@ var doctorCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+func doctorJSONOutput(pc *config.ProjectConfig, det *detect.Result, absPath string) error {
+	result := map[string]any{}
+
+	cfgInfo := map[string]any{}
+	if pc.Exists() {
+		cfgInfo["treeline_yml"] = "ok"
+		cfgInfo["project"] = pc.Project()
+		if fw := det.Framework; fw != "" && fw != "unknown" {
+			cfgInfo["framework"] = fw
+		}
+		cfgInfo["env_file"] = pc.EnvFileTarget()
+		cfgInfo["start_command"] = pc.StartCommand()
+	} else {
+		cfgInfo["treeline_yml"] = "missing"
+	}
+	result["config"] = cfgInfo
+
+	reg := registry.New("")
+	alloc := reg.Find(absPath)
+	allocInfo := map[string]any{}
+	if alloc != nil {
+		fa := format.Allocation(alloc)
+		allocInfo["ports"] = format.GetPorts(fa)
+		allocInfo["database"] = format.GetStr(fa, "database")
+	} else {
+		allocInfo["status"] = "not allocated"
+	}
+	result["allocation"] = allocInfo
+
+	rt := map[string]any{}
+	if alloc != nil {
+		fa := format.Allocation(alloc)
+		ports := format.GetPorts(fa)
+		if len(ports) > 0 {
+			rt["listening"] = allocator.CheckPortsListening(ports)
+		}
+	}
+	sockPath := supervisor.SocketPath(absPath)
+	if resp, err := supervisor.Send(sockPath, "status"); err == nil {
+		rt["supervisor"] = resp
+	} else {
+		rt["supervisor"] = "not running"
+	}
+	result["runtime"] = rt
+
+	diags := templates.Diagnose(det)
+	if len(diags) > 0 {
+		diagList := make([]map[string]string, 0, len(diags))
+		for _, d := range diags {
+			diagList = append(diagList, map[string]string{
+				"level":   d.Level,
+				"message": d.Message,
+			})
+		}
+		result["diagnostics"] = diagList
+	}
+
+	data, _ := json.MarshalIndent(result, "", "  ")
+	fmt.Println(string(data))
+	return nil
 }
 
 func doctorConfig(pc *config.ProjectConfig, det *detect.Result, absPath string) {

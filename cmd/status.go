@@ -14,6 +14,7 @@ import (
 	"github.com/git-treeline/git-treeline/internal/allocator"
 	"github.com/git-treeline/git-treeline/internal/format"
 	"github.com/git-treeline/git-treeline/internal/registry"
+	"github.com/git-treeline/git-treeline/internal/supervisor"
 	"github.com/spf13/cobra"
 )
 
@@ -107,7 +108,7 @@ func renderStatus() error {
 
 	syncBranches(reg, allocs)
 
-	if statusCheck {
+	if statusCheck || statusJSON {
 		for _, a := range allocs {
 			ports := format.GetPorts(format.Allocation(a))
 			a["listening"] = allocator.CheckPortsListening(ports)
@@ -115,6 +116,18 @@ func renderStatus() error {
 	}
 
 	if statusJSON {
+		for _, a := range allocs {
+			wt, _ := a["worktree"].(string)
+			if wt == "" {
+				continue
+			}
+			sockPath := supervisor.SocketPath(wt)
+			if resp, err := supervisor.Send(sockPath, "status"); err == nil {
+				a["supervisor"] = resp
+			} else {
+				a["supervisor"] = "not running"
+			}
+		}
 		data, _ := json.MarshalIndent(allocs, "", "  ")
 		fmt.Println(string(data))
 		return nil

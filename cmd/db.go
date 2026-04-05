@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,9 +14,11 @@ import (
 )
 
 var dbResetFrom string
+var dbNameJSON bool
 
 func init() {
 	dbResetCmd.Flags().StringVar(&dbResetFrom, "from", "", "Clone from this database instead of the configured template")
+	dbNameCmd.Flags().BoolVar(&dbNameJSON, "json", false, "Output as JSON")
 	dbCmd.AddCommand(dbResetCmd)
 	dbCmd.AddCommand(dbRestoreCmd)
 	dbCmd.AddCommand(dbNameCmd)
@@ -35,6 +38,13 @@ var dbNameCmd = &cobra.Command{
 		info, err := resolveDB()
 		if err != nil {
 			return err
+		}
+		if dbNameJSON {
+			data, _ := json.MarshalIndent(map[string]string{
+				"database": info.target,
+			}, "", "  ")
+			fmt.Println(string(data))
+			return nil
 		}
 		fmt.Println(info.target)
 		return nil
