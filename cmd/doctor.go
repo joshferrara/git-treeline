@@ -79,6 +79,9 @@ func doctorJSONOutput(pc *config.ProjectConfig, det *detect.Result, absPath stri
 		fa := format.Allocation(alloc)
 		allocInfo["ports"] = format.GetPorts(fa)
 		allocInfo["database"] = format.GetStr(fa, "database")
+		if links := reg.GetLinks(absPath); len(links) > 0 {
+			allocInfo["links"] = links
+		}
 	} else {
 		allocInfo["status"] = "not allocated"
 	}
@@ -193,6 +196,13 @@ func doctorAllocation(absPath string) {
 		doctorLine("Database", db)
 	} else {
 		doctorLine("Database", "not configured")
+	}
+
+	links := reg.GetLinks(absPath)
+	if len(links) > 0 {
+		for proj, branch := range links {
+			doctorLine(fmt.Sprintf("Link: %s", proj), branch)
+		}
 	}
 }
 

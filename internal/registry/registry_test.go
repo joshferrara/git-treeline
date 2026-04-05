@@ -254,6 +254,69 @@ func TestRegistry_FindByProject_Empty(t *testing.T) {
 	}
 }
 
+func TestFindProjectBranch(t *testing.T) {
+	dir := t.TempDir()
+	regPath := filepath.Join(dir, "registry.json")
+	reg := New(regPath)
+
+	_ = reg.Allocate(Allocation{
+		"project": "api", "worktree": "/tmp/api-main", "branch": "main", "port": float64(3000), "ports": []any{float64(3000)},
+	})
+	_ = reg.Allocate(Allocation{
+		"project": "api", "worktree": "/tmp/api-feat", "branch": "feature-x", "port": float64(3010), "ports": []any{float64(3010)},
+	})
+
+	found := reg.FindProjectBranch("api", "feature-x")
+	if found == nil {
+		t.Fatal("expected to find api/feature-x")
+	}
+	if getString(found, "worktree") != "/tmp/api-feat" {
+		t.Errorf("wrong worktree: %s", getString(found, "worktree"))
+	}
+
+	notFound := reg.FindProjectBranch("api", "no-such-branch")
+	if notFound != nil {
+		t.Error("expected nil for non-existent branch")
+	}
+}
+
+func TestLinks(t *testing.T) {
+	dir := t.TempDir()
+	regPath := filepath.Join(dir, "registry.json")
+	reg := New(regPath)
+
+	wt := filepath.Join(dir, "my-wt")
+	_ = os.MkdirAll(wt, 0o755)
+	_ = reg.Allocate(Allocation{
+		"project": "frontend", "worktree": wt, "branch": "main", "port": float64(3000), "ports": []any{float64(3000)},
+	})
+
+	if err := reg.SetLink(wt, "api", "feature-payments"); err != nil {
+		t.Fatalf("SetLink: %v", err)
+	}
+
+	links := reg.GetLinks(wt)
+	if links["api"] != "feature-payments" {
+		t.Errorf("expected api -> feature-payments, got %v", links)
+	}
+
+	if err := reg.SetLink(wt, "api", "develop"); err != nil {
+		t.Fatalf("SetLink override: %v", err)
+	}
+	links = reg.GetLinks(wt)
+	if links["api"] != "develop" {
+		t.Errorf("expected api -> develop, got %v", links)
+	}
+
+	if err := reg.RemoveLink(wt, "api"); err != nil {
+		t.Fatalf("RemoveLink: %v", err)
+	}
+	links = reg.GetLinks(wt)
+	if len(links) != 0 {
+		t.Errorf("expected empty links, got %v", links)
+	}
+}
+
 func TestRegistry_UsedRedisDbs(t *testing.T) {
 	reg := newTestRegistry(t)
 	_ = reg.Allocate(Allocation{"worktree": "/wt/a", "redis_db": float64(1)})

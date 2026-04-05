@@ -2,6 +2,7 @@ package allocator
 
 import (
 	"encoding/json"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -753,5 +754,42 @@ func TestIsPortFree(t *testing.T) {
 func TestCheckPortsListening_NothingRunning(t *testing.T) {
 	if CheckPortsListening([]int{49998, 49999}) {
 		t.Skip("unexpected listener on test ports")
+	}
+}
+
+func TestReuseExisting_PortConflict(t *testing.T) {
+	dir := t.TempDir()
+	regPath := filepath.Join(dir, "registry.json")
+
+	regData := `{"version":1,"allocations":[{"project":"test","worktree":"/tmp/test-wt","worktree_name":"test-wt","port":49990,"ports":[49990],"database":"","database_adapter":"postgresql"}]}`
+	_ = os.WriteFile(regPath, []byte(regData), 0o644)
+	reg := registry.New(regPath)
+
+	confPath := filepath.Join(dir, "config.json")
+	_ = os.WriteFile(confPath, []byte(`{"port":{"base":49980,"increment":10}}`), 0o644)
+	uc := config.LoadUserConfig(confPath)
+
+	projDir := filepath.Join(dir, "project")
+	_ = os.MkdirAll(projDir, 0o755)
+	_ = os.WriteFile(filepath.Join(projDir, ".treeline.yml"), []byte("project: test\n"), 0o644)
+	pc := config.LoadProjectConfig(projDir)
+
+	al := New(uc, pc, reg)
+
+	ln, err := net.Listen("tcp", ":49990")
+	if err != nil {
+		t.Skip("cannot bind test port 49990")
+	}
+	defer func() { _ = ln.Close() }()
+
+	alloc, err := al.Allocate("/tmp/test-wt", "test-wt", false)
+	if err != nil {
+		t.Fatalf("Allocate failed: %v", err)
+	}
+	if alloc.Port == 49990 {
+		t.Errorf("expected re-allocation away from occupied port 49990, got %d", alloc.Port)
+	}
+	if alloc.Reused {
+		t.Error("expected Reused=false after port conflict")
 	}
 }

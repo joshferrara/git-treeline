@@ -7,6 +7,47 @@ import (
 	"testing"
 )
 
+func TestHooks(t *testing.T) {
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, ".treeline.yml"), []byte(`
+project: test
+hooks:
+  pre_setup:
+    - echo pre
+  post_setup:
+    - echo post
+  pre_release:
+    - echo before-release
+`), 0o644)
+	pc := LoadProjectConfig(dir)
+	hooks := pc.Hooks()
+	if hooks == nil {
+		t.Fatal("expected hooks, got nil")
+	}
+	if len(hooks["pre_setup"]) != 1 || hooks["pre_setup"][0] != "echo pre" {
+		t.Errorf("pre_setup: got %v", hooks["pre_setup"])
+	}
+	if len(hooks["post_setup"]) != 1 || hooks["post_setup"][0] != "echo post" {
+		t.Errorf("post_setup: got %v", hooks["post_setup"])
+	}
+	if len(hooks["pre_release"]) != 1 {
+		t.Errorf("pre_release: got %v", hooks["pre_release"])
+	}
+	if _, ok := hooks["post_release"]; ok {
+		t.Error("post_release should not exist when not configured")
+	}
+}
+
+func TestHooksEmpty(t *testing.T) {
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, ".treeline.yml"), []byte("project: test\n"), 0o644)
+	pc := LoadProjectConfig(dir)
+	hooks := pc.Hooks()
+	if len(hooks) > 0 {
+		t.Errorf("expected no hooks, got %v", hooks)
+	}
+}
+
 func TestProjectConfig_Defaults(t *testing.T) {
 	dir := t.TempDir()
 	pc := LoadProjectConfig(dir)
