@@ -1,25 +1,16 @@
-## [0.31.0]
-
-- **`gtl resolve`** — look up another worktree's URL by project name. Uses same-branch matching by default: if your frontend and API repos both have `feature-auth` checked out, `{resolve:api}` in an env template resolves to `http://127.0.0.1:{api-port}` automatically. Override with `gtl resolve api staging` or `{resolve:api/staging}` in templates. Supports `--json` for scripting.
-- **`gtl link` / `gtl unlink`** — runtime resolve overrides stored in the registry. `gtl link api staging` redirects all `{resolve:api}` lookups to the `staging` branch instead of the same-branch default. Survives restarts and `gtl refresh`. Visible in `gtl status` and `gtl doctor`. Use `--restart` to bounce the supervised server after linking. `gtl unlink api` reverts to the default.
-- **`{resolve:project}` interpolation** — new env template token. Resolved at setup time using the registry. Supports `{resolve:project}` (same-branch default) and `{resolve:project/branch}` (explicit branch). Fails setup with a clear error if the target is not allocated.
-- **Links visibility** — `gtl status` and `gtl doctor` now display active link overrides for each worktree.
-
-## [0.30.0]
-
-- **Lifecycle hooks** — `.treeline.yml` now supports `pre_setup`, `post_setup`, `pre_release`, and `post_release` hooks. Pre-hooks abort the operation on failure; post-hooks warn and continue. Hook ordering: allocate → env → DB → `pre_setup` → `commands.setup` → editor → `post_setup`. Release: confirm → `pre_release` → free/drop → `post_release`.
-
-## [0.29.0]
-
-- **`gtl start --await`** — blocks until the server is accepting TCP connections on its allocated port, then exits 0. Designed for agents and CI scripts that need to wait for readiness before hitting the server. `--await-timeout` sets the deadline in seconds (default 60). Works on both fresh start and resume (when the supervisor is already running).
-- **`gtl open`** — opens the current worktree in the browser. Prefers `https://{project}-{branch}.localhost` when `gtl serve` is running; falls back to `http://localhost:{port}`. Always opens the primary port.
-- **`gtl clone`** — clone a repo and set up Treeline in one step. Passes all flags through to `git clone`, detects the framework, generates `.treeline.yml` if absent, and runs `gtl setup`. Deliberately does not auto-start — cloning a foreign repo and running arbitrary shell commands is a trust boundary.
-
 ## [0.28.0]
 
 - **`gtl env`** — print the current worktree's environment. Default output shows every key from the env file, with Treeline-managed keys annotated `[treeline]`. `--json` for structured output. `--template` shows unresolved interpolation tokens instead of final values.
 - **Port conflict detection on reuse** — `gtl setup` now checks `IsPortFree` when reusing an existing allocation. If any port is occupied (e.g. another process grabbed it since last allocation), Treeline automatically re-allocates to a free block, updates the registry, and prints a warning. Treeline never hands back a port it cannot actually use.
 - **Shell completions** — `gtl completion bash|zsh|fish|powershell` outputs completion scripts. Homebrew installs completions automatically. Dynamic completions added for `gtl config get/set` (common config keys) and `gtl status --project` (project names).
+- **`gtl start --await`** — blocks until the server is accepting TCP connections on its allocated port, then exits 0. Designed for agents and CI scripts that need to wait for readiness before hitting the server. `--await-timeout` sets the deadline in seconds (default 60). Works on both fresh start and resume (when the supervisor is already running).
+- **`gtl open`** — opens the current worktree in the browser. Prefers `https://{project}-{branch}.localhost` when `gtl serve` is running; falls back to `http://localhost:{port}`. Always opens the primary port.
+- **`gtl clone`** — clone a repo and set up Treeline in one step. Passes all flags through to `git clone`, detects the framework, generates `.treeline.yml` if absent, and runs `gtl setup`. Deliberately does not auto-start — cloning a foreign repo and running arbitrary shell commands is a trust boundary.
+- **Lifecycle hooks** — `.treeline.yml` now supports `pre_setup`, `post_setup`, `pre_release`, and `post_release` hooks. Pre-hooks abort the operation on failure; post-hooks warn and continue. Hook ordering: allocate → env → DB → `pre_setup` → `commands.setup` → editor → `post_setup`. Release: confirm → `pre_release` → free/drop → `post_release`.
+- **`gtl resolve`** — look up another worktree's URL by project name. Uses same-branch matching by default: if your frontend and API repos both have `feature-auth` checked out, `{resolve:api}` in an env template resolves to `http://127.0.0.1:{api-port}` automatically. Override with `gtl resolve api staging` or `{resolve:api/staging}` in templates. Supports `--json` for scripting.
+- **`gtl link` / `gtl unlink`** — runtime resolve overrides stored in the registry. `gtl link api staging` redirects all `{resolve:api}` lookups to the `staging` branch instead of the same-branch default. Survives restarts and `gtl refresh`. Visible in `gtl status` and `gtl doctor`. Use `--restart` to bounce the supervised server after linking. `gtl unlink api` reverts to the default.
+- **`{resolve:project}` interpolation** — new env template token. Resolved at setup time using the registry. Supports `{resolve:project}` (same-branch default) and `{resolve:project/branch}` (explicit branch). Fails setup with a clear error if the target is not allocated.
+- **Links visibility** — `gtl status` and `gtl doctor` now display active link overrides for each worktree.
 
 ## [0.27.0]
 

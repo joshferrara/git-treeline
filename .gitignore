@@ -5,4 +5,7 @@ gtl
 
 # OS
 .DS_Store
+
+# Local
 .envrc
+temp/
